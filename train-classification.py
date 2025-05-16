@@ -11,12 +11,33 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 
+class PadTileToMinSize:
+    def __init__(self, min_size=112):
+        self.min_size = min_size
+
+    def __call__(self, img):
+        w, h = img.size
+        if w < self.min_size:
+            n = (self.min_size + w - 1) // w
+            imgs = [img] * n
+            new_img = Image.new(img.mode, (w * n, h))
+            for i in range(n):
+                new_img.paste(imgs[i], (i * w, 0))
+            img = new_img.crop((0, 0, self.min_size, h))
+        w, h = img.size
+        if h < self.min_size:
+            n = (self.min_size + h - 1) // h
+            imgs = [img] * n
+            new_img = Image.new(img.mode, (w, h * n))
+            for i in range(n):
+                new_img.paste(imgs[i], (0, i * h))
+            img = new_img.crop((0, 0, w, self.min_size))
+        return img
+
+
 class TreeDataset(Dataset):
-    def __init__(
-        self, df, img_dir, transform=None, strong_transform=None, rare_classes=None
-    ):
+    def __init__(self, df, transform=None, strong_transform=None, rare_classes=None):
         self.df = df.reset_index(drop=True)
-        self.img_dir = img_dir
         self.transform = transform
         self.strong_transform = strong_transform
         self.rare_classes = set(rare_classes) if rare_classes is not None else set()
@@ -26,7 +47,7 @@ class TreeDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        img_path = os.path.join(self.img_dir, row["filename"])
+        img_path = os.path.join(row["source_img_dir"], row["filename"])
         image = Image.open(img_path).convert("RGB")
         label = int(row["class_id"])
         if self.strong_transform and label in self.rare_classes:
@@ -40,7 +61,8 @@ def get_transforms(train=True):
     if train:
         return T.Compose(
             [
-                T.RandomResizedCrop(224, scale=(0.7, 1.0)),
+                PadTileToMinSize(112),
+                T.Resize((224, 224)),
                 T.RandomHorizontalFlip(),
                 T.RandomVerticalFlip(),
                 T.RandomRotation(30),
@@ -53,8 +75,8 @@ def get_transforms(train=True):
     else:
         return T.Compose(
             [
-                T.Resize(256),
-                T.CenterCrop(224),
+                PadTileToMinSize(112),
+                T.Resize((224, 224)),
                 T.ToTensor(),
                 T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             ]
@@ -64,7 +86,8 @@ def get_transforms(train=True):
 def get_strong_transforms():
     return T.Compose(
         [
-            T.RandomResizedCrop(224, scale=(0.5, 1.0)),
+            PadTileToMinSize(112),
+            T.Resize((224, 224)),
             T.RandomHorizontalFlip(),
             T.RandomVerticalFlip(),
             T.RandomRotation(45),
@@ -124,22 +147,31 @@ def check_chinese_in_path():
         )
 
 
-def main(base_dir=r"IDTREES_classification"):
+def main(base_dir=r"classification_dataset"):
     check_chinese_in_path()
-    img_dir = os.path.join(base_dir, "images")
-    label_csv = os.path.join(base_dir, "species_labels.csv")
-    df = pd.read_csv(label_csv)
-    # filter classes with less than 2 samples
+    
+    print("Begin to load dataset...")
+    # img_dir1 = os.path.join(base_dir, "IDTREES_classification/images")
+    # label_csv1 = os.path.join(base_dir, "IDTREES_classification/labels.csv")
+    # df1 = pd.read_csv(label_csv1)
+    # df1["source_img_dir"] = img_dir1
+
+    img_dir2 = os.path.join(base_dir, "PureForest_classification/images")
+    label_csv2 = os.path.join(base_dir, "PureForest_classification/labels.csv")
+    df2 = pd.read_csv(label_csv2)
+    df2["source_img_dir"] = img_dir2
+
+    # df = pd.concat([df1, df2], ignore_index=True)
+    df = df2
+
     cls_counts = df["class_id"].value_counts()
     valid_classes = cls_counts[cls_counts >= 2].index
     df = df[df["class_id"].isin(valid_classes)].reset_index(drop=True)
-    class_id_map = {cid: idx for idx, cid in enumerate(sorted(df["class_id"].unique()))}
-    df["class_id"] = df["class_id"].map(class_id_map)
     num_classes = df["class_id"].nunique()
 
     class_sample_count = df["class_id"].value_counts().sort_index().values
     class_weights = 1.0 / torch.tensor(class_sample_count, dtype=torch.float)
-    class_weights = class_weights / class_weights.sum() * num_classes  # 归一化
+    class_weights = class_weights / class_weights.sum() * num_classes
 
     train_df, val_df = train_test_split(
         df, test_size=0.1, stratify=df["class_id"], random_state=42
@@ -155,12 +187,11 @@ def main(base_dir=r"IDTREES_classification"):
 
     train_ds = TreeDataset(
         train_df,
-        img_dir,
         transform=get_transforms(train=True),
         strong_transform=get_strong_transforms(),
         rare_classes=rare_classes,
     )
-    val_ds = TreeDataset(val_df, img_dir, transform=get_transforms(train=False))
+    val_ds = TreeDataset(val_df, transform=get_transforms(train=False))
 
     num_workers = 4 if os.name != "nt" else 0
     train_loader = DataLoader(
@@ -173,6 +204,7 @@ def main(base_dir=r"IDTREES_classification"):
     val_loader = DataLoader(
         val_ds, batch_size=64, shuffle=False, num_workers=num_workers, pin_memory=True
     )
+    print("Dataset loaded successfully.")
 
     model = LitMobileNet(num_classes=num_classes, class_weights=class_weights)
 

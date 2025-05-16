@@ -37,21 +37,8 @@ The system consists of three main components:
 | Source | Description |
 |--------|-------------|
 | [Taipei City Government Open Data](https://data.gov.tw/) | Tree location + species |
-| Google Maps Static API | Satellite RGB imagery |
+| [Google Maps Static API](https://developers.google.com/maps/documentation/maps-static/overview?hl=en) | Satellite RGB imagery |
 | [NEON Tree Crown Dataset](https://zenodo.org/record/6598391) | Pretraining on tree detection |
-| [TreeSatAI](https://zenodo.org/record/6780578) | Pretraining on tree species |
-
+| [IDTReeS](https://zenodo.org/records/3934932) | Pretraining on tree classification & detection |
+| [PureForest](https://huggingface.co/datasets/IGNF/PureForest) | Pretraining on tree classification |
 ---
-
-## 🧪 Model Training Flow
-
-```text
-[Input image (satellite)] → HR-SFANet → Tree Points
-                                ↓
-                    Cropped tree patches
-                                ↓
-                          U²-Net → isolated crown
-                                ↓
-                      ResNet → tree species
-                                ↓
-               [Final output: coordinates + species]
