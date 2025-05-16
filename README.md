@@ -33,12 +33,13 @@ The system consists of three main components:
 ---
 
 ## 🗂️ Dataset Sources
+Pre-processed datasets are available in [here](https://huggingface.co/datasets/zbyzby/TaipeiTrees/tree/main).
 
 | Source | Description |
 |--------|-------------|
 | [Taipei City Government Open Data](https://data.gov.tw/) | Tree location + species |
 | [Google Maps Static API](https://developers.google.com/maps/documentation/maps-static/overview?hl=en) | Satellite RGB imagery |
-| [NEON Tree Crown Dataset](https://zenodo.org/record/6598391) | Pretraining on tree detection |
+| [Forest Damages – Larch Casebearer](https://lila.science/datasets/forest-damages-larch-casebearer/) | Pretraining on tree detection |
 | [IDTReeS](https://zenodo.org/records/3934932) | Pretraining on tree classification & detection |
 | [PureForest](https://huggingface.co/datasets/IGNF/PureForest) | Pretraining on tree classification |
 ---
