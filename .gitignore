@@ -41,4 +41,4 @@ source_datasets_finetuning/labels/
 yolo_dataset_finetune/images/
 yolo_dataset_finetune/labels/
 
-green-coverage
+green-coverage/api/model.pt
